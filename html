@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import argparse
+import logging
+import re
+import sys
+from urlparse import urlparse
+
+from bs4 import BeautifulSoup
+import requests
+from requests.exceptions import SSLError
+
+logging.getLogger('requests').setLevel(logging.INFO)
+logging.getLogger(__name__)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+
+parser = argparse.ArgumentParser(description='This script takes a url and a selector and prints items found to STDOUT')
+parser.add_argument('url', type=str, help='url to parse')
+parser.add_argument('selector', type=str, help='selector for elements to find')
+
+args = parser.parse_args()
+
+
+def prepare_content(match, url):
+    content = match.get_text().encode('utf-8').strip()
+
+    if not re.search(r'[a-zA-Z]', content):
+        return None
+
+    content = '\n' + re.sub(r'\s+', ' ', content)
+
+    if match.name == 'a':
+        ref = match.attrs.get('href','')
+        parsed_ref = urlparse(ref)
+        if ref and not parsed_ref.netloc:
+            ref = '{}{}'.format(url.netloc, ref)
+            content += '\n({})'.format(ref)
+        else:
+            return None
+
+    return content
+
+
+if __name__ == '__main__':
+    url = args.url
+
+    if not 'http' in url:
+        url = 'https://' + url
+
+    parsed_url = urlparse(url)
+    selector = args.selector
+
+    try:
+        r = requests.get(parsed_url.geturl())
+    except SSLError:
+        logging.info('SSL error using https. Falling back to http')
+
+        url = re.sub('https:', 'http:', url)
+        parsed_url = urlparse(url)
+        r = requests.get(parsed_url.geturl())
+
+    soup = BeautifulSoup(r.text, 'html.parser')
+    matches = soup.select(selector)
+    content_holder = set()
+
+    for match in matches:
+        content = prepare_content(match, parsed_url)
+
+        if content:
+            content_holder.add(content.title())
+
+    for content in sorted(content_holder):
+        print content
