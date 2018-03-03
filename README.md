@@ -9,7 +9,7 @@
 
 ### Example
 
-`html https://www.ted.com a`
+`html www.ted.com a`
 
 ### Installation
 
